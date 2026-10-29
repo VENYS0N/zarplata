@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Простой калькулятор зарплаты с учётом сотрудников, товаров и материалов.">
+  <meta name="theme-color" id="themeColor" content="#f3f6f4">
+  <title>Расчёт зарплаты и прибыли</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('payroll-theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark = saved === 'dark' || (!saved && prefersDark);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        var themeColor = document.getElementById('themeColor');
+        if (themeColor) themeColor.setAttribute('content', dark ? '#0b1210' : '#f3f6f4');
+      } catch (error) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">₽</div>
+      <div>
+        <span class="brand-title">ЗарплатаПро</span>
+        <span class="brand-sub">расчёт зарплаты и прибыли</span>
+      </div>
+    </div>
+
+    <nav class="topnav" aria-label="Разделы страницы">
+      <button type="button" data-scroll="summary">Сводка</button>
+      <button type="button" data-scroll="employees">Сотрудники</button>
+      <button type="button" data-scroll="products">Товары</button>
+      <button type="button" data-scroll="materials">Материалы</button>
+    </nav>
+
+    <div class="topbar-actions">
+      <span class="save-state" id="saveState" role="status" aria-live="polite">Сохранено</span>
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Включить тёмную тему" title="Включить тёмную тему">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Финансовый калькулятор</p>
+        <h1 id="heroTitle">Расчёт зарплаты и прибыли</h1>
+        <p>Учитывайте выручку, себестоимость товаров, материалы и фонд оплаты труда. Все показатели пересчитываются автоматически.</p>
+        <div class="hero-meta">
+          <span id="heroEmployees">0 сотрудников</span>
+          <span id="heroProducts">0 товаров</span>
+          <span id="heroMaterials">0 материалов</span>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <button type="button" class="btn btn-light" id="printBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Печать / PDF
+        </button>
+        <button type="button" class="btn btn-dark-ghost" id="exportBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          Экспорт
+        </button>
+        <button type="button" class="btn btn-dark-ghost" id="importBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 8l5-5 5 5"/><path d="M12 3v12"/></svg>
+          Импорт
+        </button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+    </section>
+
+    <section class="card settings" id="settings" aria-labelledby="settingsTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="settingsTitle">Параметры расчёта</h2>
+          <p class="muted">Эти значения применяются ко всем разделам.</p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <div class="field">
+          <label for="setPeriod">Период расчёта</label>
+          <input type="text" id="setPeriod" data-setting="period" data-type="text" maxlength="60" placeholder="Например, Октябрь 2026">
+        </div>
+        <div class="field">
+          <label for="setWorkDays">Рабочих дней</label>
+          <input type="number" id="setWorkDays" data-setting="workDays" data-type="number" min="1" max="31" step="1">
+        </div>
+        <div class="field">
+          <label for="setNdfl">НДФЛ, %</label>
+          <input type="number" id="setNdfl" data-setting="ndfl" data-type="number" min="0" max="100" step="0.1">
+        </div>
+        <div class="field">
+          <label for="setSocial">Страховые взносы, %</label>
+          <input type="number" id="setSocial" data-setting="social" data-type="number" min="0" max="100" step="0.1">
+        </div>
+        <div class="field">
+          <label for="setOther">Прочие расходы, ₽</label>
+          <input type="number" id="setOther" data-setting="other" data-type="number" min="0" step="any">
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <span class="muted small">Данные сохраняются только в этом браузере и никуда не отправляются.</span>
+        <div class="link-actions">
+          <button type="button" class="link-btn" id="demoBtn">Заполнить примером</button>
+          <button type="button" class="link-btn danger" id="clearBtn">Очистить данные</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="summary" aria-label="Финансовая сводка">
+      <div class="kpi-grid">
+        <article class="kpi kpi-revenue">
+          <div class="kpi-head">
+            <span class="kpi-label">Выручка</span>
+            <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>
+          </div>
+          <strong class="kpi-value" id="kpiRevenue">0 ₽</strong>
+          <span class="kpi-sub" id="kpiRevenueSub"></span>
+        </article>
+
+        <article class="kpi kpi-expenses">
+          <div class="kpi-head">
+            <span class="kpi-label">Расходы</span>
+            <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l6 6 4-4 8 8"/><path d="M21 17h-6v-6"/></svg></span>
+          </div>
+          <strong class="kpi-value" id="kpiExpenses">0 ₽</strong>
+          <span class="kpi-sub" id="kpiExpensesSub"></span>
+        </article>
+
+        <article class="kpi kpi-payroll">
+          <div class="kpi-head">
+            <span class="kpi-label">ФОТ начислено</span>
+            <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          </div>
+          <strong class="kpi-value" id="kpiPayroll">0 ₽</strong>
+          <span class="kpi-sub" id="kpiPayrollSub"></span>
+        </article>
+
+        <article class="kpi kpi-profit" id="kpiProfitCard">
+          <div class="kpi-head">
+            <span class="kpi-label">Чистая прибыль</span>
+            <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>
+          </div>
+          <strong class="kpi-value" id="kpiProfit">0 ₽</strong>
+          <span class="kpi-sub" id="kpiProfitSub"></span>
+        </article>
+      </div>
+
+      <div class="summary-grid">
+        <article class="card summary-card">
+          <div class="summary-head">
+            <h2>Структура расходов</h2>
+            <span class="summary-total" id="expenseTotal">0 ₽</span>
+          </div>
+          <div class="bars" id="expenseBars"></div>
+        </article>
+
+        <article class="card summary-card">
+          <div class="summary-head">
+            <h2>Эффективность</h2>
+          </div>
+          <div class="stats-grid">
+            <div class="stat">
+              <span class="stat-label">Сотрудников</span>
+              <strong class="stat-value" id="statEmployees">0</strong>
+              <span class="stat-sub" id="statEmployeesSub"></span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Прибыль на сотрудника</span>
+              <strong class="stat-value" id="statProfitPer">0 ₽</strong>
+              <span class="stat-sub" id="statProfitPerSub"></span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Доля ФОТ</span>
+              <strong class="stat-value" id="statPayrollShare">0%</strong>
+              <span class="stat-sub" id="statPayrollShareSub"></span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Доля материалов</span>
+              <strong class="stat-value" id="statMaterialsShare">0%</strong>
+              <span class="stat-sub" id="statMaterialsShareSub"></span>
+            </div>
+          </div>
+          <div class="insight is-muted" id="insight"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section card" id="employees" aria-labelledby="employeesTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="employeesTitle">Сотрудники <span class="count-badge" id="employeesCount">0</span></h2>
+          <p class="muted">Начисление пропорционально отработанным дням, премия — процент от начисления.</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-add="employees">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Добавить
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table-employees" id="employeesTable">
+          <thead>
+            <tr>
+              <th scope="col">Сотрудник</th>
+              <th scope="col">Должность</th>
+              <th scope="col" class="num">Оклад, ₽</th>
+              <th scope="col" class="num">Дней</th>
+              <th scope="col" class="num">Премия, %</th>
+              <th scope="col" class="num">Начислено</th>
+              <th scope="col" class="num">НДФЛ</th>
+              <th scope="col" class="num">К выплате</th>
+              <th scope="col" class="col-actions" aria-label="Действия"></th>
+            </tr>
+          </thead>
+          <tbody id="employeesBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5">Итого</td>
+              <td class="num" id="empFootGross">0 ₽</td>
+              <td class="num" id="empFootTax">0 ₽</td>
+              <td class="num" id="empFootNet">0 ₽</td>
+              <td class="col-actions"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="table-note" id="empNote"></p>
+    </section>
+
+    <section class="section card" id="products" aria-labelledby="productsTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="productsTitle">Товары <span class="count-badge" id="productsCount">0</span></h2>
+          <p class="muted">Выручка и себестоимость умножаются на количество.</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-add="products">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Добавить
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table-products" id="productsTable">
+          <thead>
+            <tr>
+              <th scope="col">Товар</th>
+              <th scope="col" class="num">Кол-во</th>
+              <th scope="col" class="num">Себестоимость ед., ₽</th>
+              <th scope="col" class="num">Цена продажи, ₽</th>
+              <th scope="col" class="num">Себестоимость</th>
+              <th scope="col" class="num">Выручка</th>
+              <th scope="col" class="num">Прибыль</th>
+              <th scope="col" class="col-actions" aria-label="Действия"></th>
+            </tr>
+          </thead>
+          <tbody id="productsBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4">Итого</td>
+              <td class="num" id="prodFootCost">0 ₽</td>
+              <td class="num" id="prodFootRevenue">0 ₽</td>
+              <td class="num" id="prodFootProfit">0 ₽</td>
+              <td class="col-actions"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="table-note" id="prodNote"></p>
+    </section>
+
+    <section class="section card" id="materials" aria-labelledby="materialsTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="materialsTitle">Материалы <span class="count-badge" id="materialsCount">0</span></h2>
+          <p class="muted">Закупки и расходники за период — отдельная статья расходов.</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-add="materials">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Добавить
+        </button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table-materials" id="materialsTable">
+          <thead>
+            <tr>
+              <th scope="col">Материал</th>
+              <th scope="col" class="num">Кол-во</th>
+              <th scope="col">Ед. изм.</th>
+              <th scope="col" class="num">Цена за ед., ₽</th>
+              <th scope="col" class="num">Сумма</th>
+              <th scope="col" class="col-actions" aria-label="Действия"></th>
+            </tr>
+          </thead>
+          <tbody id="materialsBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4">Итого</td>
+              <td class="num" id="matFootTotal">0 ₽</td>
+              <td class="col-actions"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="table-note" id="matNote"></p>
+    </section>
+
+    <footer class="page-footer">
+      <span>Калькулятор зарплаты и прибыли</span>
+      <span>Все расчёты выполняются в браузере</span>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
